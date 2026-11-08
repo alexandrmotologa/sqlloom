@@ -59,63 +59,85 @@ func (r *Router) handleSimpleQuery(msg wire.RawMessage) error {
 		cachedEntry, found := r.session.cache.Get(cacheKey)
 
 		if found {
-			// CACHE HIT: Serve immediately from memory
-			if err := r.session.clientWriter.WriteRaw(cachedEntry.RowDescription); err != nil {
-				return err
-			}
-			for _, row := range cachedEntry.DataRows {
-				if err := r.session.clientWriter.WriteRaw(row); err != nil {
-					return err
-				}
-			}
-			if err := r.session.clientWriter.WriteRaw(cachedEntry.CommandComplete); err != nil {
-				return err
-			}
-			if err := r.session.clientWriter.WriteRaw(wire.BuildReadyForQuery(r.session.txStatus)); err != nil {
-				return err
-			}
-			if err := r.session.clientWriter.Flush(); err != nil {
-				return err
-			}
-
-			elapsed := time.Since(start)
-			elapsedMs := float64(elapsed.Microseconds()) / 1000.0
-
-			r.session.metrics.CacheHits.Add(1)
-			// Track latency saved compared to typical 15ms database roundtrip
-			r.session.metrics.SavedLatencyMicros.Add(15000 - elapsed.Microseconds())
-
-			r.session.hub.Broadcast(telemetry.QueryEvent{
-				SQL:        rawSQL,
-				Normalized: normSQL,
-				Status:     "HIT",
-				DurationMs: elapsedMs,
-				Tables:     decision.Tables,
-			})
-
-			return nil
+			return r.serveCachedEntry(cachedEntry, rawSQL, normSQL, decision.Tables, start)
 		}
 
-		// CACHE MISS: Forward to upstream, intercept results, and cache
-		return r.executeAndCacheSimpleQuery(msg, rawSQL, normSQL, cacheKey, decision)
+		// SingleFlight: deduplicate concurrent cache misses across goroutines
+		entry, shared, err := r.session.singleflight.Do(cacheKey, func() (*cache.CacheEntry, error) {
+			return r.executeAndCacheSimpleQuery(msg, rawSQL, normSQL, cacheKey, decision)
+		})
+
+		if err != nil {
+			// Grace Mode: serve stale cache if upstream is unreachable or returns error
+			if r.session.cfg.GraceMode {
+				if stale, ok := r.session.cache.Get(cacheKey); ok {
+					return r.serveCachedEntry(stale, rawSQL, normSQL, decision.Tables, start)
+				}
+			}
+			return err
+		}
+
+		if shared && entry != nil {
+			// Shared execution: serve duplicate caller directly from memory
+			return r.serveCachedEntry(entry, rawSQL, normSQL, decision.Tables, start)
+		}
+
+		return nil
 	}
 
 	// Route 2: Non-cacheable queries (writes, transactions, volatile functions, DDL)
 	return r.executePassthroughSimpleQuery(msg, rawSQL, decision)
 }
 
+func (r *Router) serveCachedEntry(entry *cache.CacheEntry, rawSQL, normSQL string, tables []string, start time.Time) error {
+	if err := r.session.clientWriter.WriteRaw(entry.RowDescription); err != nil {
+		return err
+	}
+	for _, row := range entry.DataRows {
+		if err := r.session.clientWriter.WriteRaw(row); err != nil {
+			return err
+		}
+	}
+	if err := r.session.clientWriter.WriteRaw(entry.CommandComplete); err != nil {
+		return err
+	}
+	if err := r.session.clientWriter.WriteRaw(wire.BuildReadyForQuery(r.session.txStatus)); err != nil {
+		return err
+	}
+	if err := r.session.clientWriter.Flush(); err != nil {
+		return err
+	}
+
+	elapsed := time.Since(start)
+	elapsedMs := float64(elapsed.Microseconds()) / 1000.0
+
+	r.session.metrics.CacheHits.Add(1)
+	// Track latency saved compared to typical 15ms database roundtrip
+	r.session.metrics.SavedLatencyMicros.Add(15000 - elapsed.Microseconds())
+
+	r.session.hub.Broadcast(telemetry.QueryEvent{
+		SQL:        rawSQL,
+		Normalized: normSQL,
+		Status:     "HIT",
+		DurationMs: elapsedMs,
+		Tables:     tables,
+	})
+
+	return nil
+}
+
 func (r *Router) executeAndCacheSimpleQuery(
 	msg wire.RawMessage,
 	rawSQL, normSQL, cacheKey string,
 	decision parser.CacheDecision,
-) error {
+) (*cache.CacheEntry, error) {
 	start := time.Now()
 
 	if err := r.session.upstream.Writer.WriteRaw(msg); err != nil {
-		return err
+		return nil, err
 	}
 	if err := r.session.upstream.Writer.Flush(); err != nil {
-		return err
+		return nil, err
 	}
 
 	var rowDesc wire.RawMessage
@@ -126,12 +148,12 @@ func (r *Router) executeAndCacheSimpleQuery(
 	for {
 		resp, err := r.session.upstream.Reader.ReadMessage()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Stream packet back to client
 		if err := r.session.clientWriter.WriteRaw(resp); err != nil {
-			return err
+			return nil, err
 		}
 
 		switch resp.Type {
@@ -148,12 +170,14 @@ func (r *Router) executeAndCacheSimpleQuery(
 				r.session.txStatus = resp.Payload[0]
 			}
 			if err := r.session.clientWriter.Flush(); err != nil {
-				return err
+				return nil, err
 			}
 
 			elapsed := time.Since(start)
 			elapsedMs := float64(elapsed.Microseconds()) / 1000.0
 			r.session.metrics.CacheMisses.Add(1)
+
+			var createdEntry *cache.CacheEntry
 
 			// Store in cache if query completed successfully
 			if !hadError && rowDesc.Type == wire.MsgRowDescription {
@@ -161,7 +185,7 @@ func (r *Router) executeAndCacheSimpleQuery(
 				if decision.CustomTTL > 0 {
 					ttl = time.Duration(decision.CustomTTL) * time.Second
 				}
-				entry := cache.NewCacheEntry(
+				createdEntry = cache.NewCacheEntry(
 					cacheKey,
 					normSQL,
 					decision.Tables,
@@ -170,7 +194,7 @@ func (r *Router) executeAndCacheSimpleQuery(
 					commandComplete,
 					ttl,
 				)
-				r.session.invalidator.Register(entry)
+				r.session.invalidator.Register(createdEntry)
 			}
 
 			r.session.hub.Broadcast(telemetry.QueryEvent{
@@ -181,7 +205,7 @@ func (r *Router) executeAndCacheSimpleQuery(
 				Tables:     decision.Tables,
 			})
 
-			return nil
+			return createdEntry, nil
 		}
 	}
 }
@@ -242,6 +266,11 @@ func (r *Router) executePassthroughSimpleQuery(
 					evicted := r.session.invalidator.InvalidateTables(decision.Tables)
 					r.session.metrics.Invalidations.Add(1)
 					r.session.metrics.EvictedEntries.Add(int64(len(evicted)))
+					if r.session.tracker != nil {
+						for _, t := range decision.Tables {
+							r.session.tracker.RecordInvalidation(t, string(decision.Kind), len(evicted), elapsedMs)
+						}
+					}
 
 					r.session.hub.Broadcast(telemetry.QueryEvent{
 						SQL:        rawSQL,
@@ -258,6 +287,11 @@ func (r *Router) executePassthroughSimpleQuery(
 					evicted := r.session.invalidator.InvalidateTables(r.session.modifiedTablesInTx)
 					r.session.metrics.Invalidations.Add(1)
 					r.session.metrics.EvictedEntries.Add(int64(len(evicted)))
+					if r.session.tracker != nil {
+						for _, t := range r.session.modifiedTablesInTx {
+							r.session.tracker.RecordInvalidation(t, "COMMIT", len(evicted), elapsedMs)
+						}
+					}
 
 					r.session.hub.Broadcast(telemetry.QueryEvent{
 						SQL:        rawSQL,

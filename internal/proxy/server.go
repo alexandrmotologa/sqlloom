@@ -14,14 +14,16 @@ import (
 
 // Server coordinates the TCP ingress listener and client sessions.
 type Server struct {
-	cfg         *config.Config
-	listener    net.Listener
-	cache       *cache.ShardedLRU
-	invalidator *cache.Invalidator
-	metrics     *telemetry.Metrics
-	hub         *telemetry.EventHub
-	wg          sync.WaitGroup
-	closed      chan struct{}
+	cfg          *config.Config
+	listener     net.Listener
+	cache        *cache.ShardedLRU
+	invalidator  *cache.Invalidator
+	metrics      *telemetry.Metrics
+	hub          *telemetry.EventHub
+	tracker      *telemetry.InvalidationTracker
+	singleflight *SingleFlightGroup
+	wg           sync.WaitGroup
+	closed       chan struct{}
 }
 
 // NewServer initializes the proxy server.
@@ -33,12 +35,14 @@ func NewServer(
 	hub *telemetry.EventHub,
 ) *Server {
 	return &Server{
-		cfg:         cfg,
-		cache:       cache,
-		invalidator: invalidator,
-		metrics:     metrics,
-		hub:         hub,
-		closed:      make(chan struct{}),
+		cfg:          cfg,
+		cache:        cache,
+		invalidator:  invalidator,
+		metrics:      metrics,
+		hub:          hub,
+		tracker:      telemetry.GlobalInvalidationTracker,
+		singleflight: NewSingleFlightGroup(),
+		closed:       make(chan struct{}),
 	}
 }
 
@@ -76,7 +80,7 @@ func (s *Server) acceptLoop() {
 				s.wg.Done()
 			}()
 
-			session := NewSession(c, s.cfg, s.cache, s.invalidator, s.metrics, s.hub)
+			session := NewSession(c, s.cfg, s.cache, s.invalidator, s.metrics, s.hub, s.singleflight, s.tracker)
 			_ = session.Handle()
 		}(conn)
 	}

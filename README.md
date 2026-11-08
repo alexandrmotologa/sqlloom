@@ -13,9 +13,14 @@ It requires zero application code changes, zero ORM modifications, and ships as 
 - **Zero application code changes**: applications connect directly to sqlloom using standard database drivers (`psql`, `pgx`, `node-postgres`, `prisma`, `hibernate`, `gorm`).
 - **Sub-0.5ms read latency**: serves repetitive queries directly from memory, eliminating database query planning, lock contention, and disk I/O.
 - **Automated table invalidation**: writes touching table `T` instantly purge all cached queries dependent on table `T`.
+- **SingleFlight coalescing**: deduplicates concurrent cache misses in flight, suppressing thundering herd problems during cold starts.
+- **Declarative cache rules engine**: configure table exclusions, per-table custom TTLs, and regex pattern routing at runtime without code changes.
+- **Cache churn inspector**: detects high-frequency write tables and provides actionable recommendations to prevent cache thrashing.
+- **Grace mode**: serves stale cache entries during transient upstream database spikes or brief connectivity hiccups.
 - **Transaction safe**: queries inside explicit transactions (`BEGIN ... COMMIT`) bypass shared cache to preserve ACID read consistency. Invalidation occurs upon `COMMIT`.
 - **Low memory footprint (< 35MB RAM)**: 16-shard thread-safe LRU cache with byte-level memory tracking and automatic eviction.
-- **Embedded React 19 Cockpit**: live Server-Sent Events (SSE) query stream, hit ratio gauges, table dependency trees, and 1-click manual eviction console served directly from the single binary on `:8080`.
+- **Embedded React 19 Cockpit**: live Server-Sent Events (SSE) query stream, hit ratio gauges, interactive rules editor, invalidation activity log, smoke benchmark load tester, and 1-click table purge console served directly on `:8080`.
+- **CLI diagnostics**: command-line `sqlloom explain "<QUERY>"` for instant cacheability, fingerprint, and dependency inspection.
 - **Prometheus telemetry**: metrics endpoint at `/metrics` exporting hit ratios, query execution durations, saved database time, and active connections.
 
 ---
@@ -40,7 +45,7 @@ It requires zero application code changes, zero ORM modifications, and ships as 
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │ SQL Lexer & Table Dependency Extractor                           │  │
 │  │ - Fingerprint: SHA-256(Database + NormalizedSQL + Params)        │  │
-│  │ - Table Dependency Extraction: FROM, JOIN, INTO, UPDATE          │  │
+│  │ - Declarative Rules Filter: Exclusions, Patterns, Custom TTLs    │  │
 │  │ - Cacheability Filter: volatile functions, tx status, directives │  │
 │  └──────────────────────────────────┬───────────────────────────────┘  │
 │                                     │                                  │
@@ -50,6 +55,7 @@ It requires zero application code changes, zero ORM modifications, and ships as 
 │  ┌───────────────────────────────┐           ┌──────────────────────┐  │
 │  │ In-Memory Sharded Query Cache │           │ Forward to Postgres  │  │
 │  │ (RowDescription + DataRows)   │           │ & Invalidate Tables  │  │
+│  │ SingleFlight In-Flight Guard  │           │ Track Churn Activity │  │
 │  └──────────────┬────────────────┘           └──────────┬───────────┘  │
 │   Cache HIT     │          │ Cache MISS                 │              │
 │   (< 0.5ms)     │          ▼                            │              │
@@ -66,7 +72,9 @@ It requires zero application code changes, zero ORM modifications, and ships as 
 │  ┌──────────────────────────────────────────────────────────────────┐  │
 │  │ Embedded React 19 Query Cockpit (:8080)                          │  │
 │  │ - Real-time SSE query stream, hit/miss ratios, saved latency     │  │
-│  │ - Table dependency viewer and 1-click table-level cache purge    │  │
+│  │ - Interactive Rules Editor (table exclusions, TTLs, regexes)     │  │
+│  │ - Invalidation Activity Log & Cache Churn Inspector              │  │
+│  │ - 1-Click Smoke Benchmark & Synthetic Load Simulator             │  │
 │  │ - Prometheus metrics (/metrics) and health probe (/healthz)      │  │
 │  └──────────────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────────┘
@@ -115,12 +123,35 @@ Open the Query Cockpit in your browser at `http://localhost:8080`.
 
 ---
 
+## CLI Diagnostics: `sqlloom explain`
+
+Inspect how sqlloom normalizes, fingerprints, and routes any query:
+
+```bash
+./sqlloom explain "SELECT id, name FROM users WHERE active = true AND org_id = 42"
+```
+
+Output:
+```
+=== sqlloom Query Diagnostics & Fingerprint ===
+Raw SQL:              SELECT id, name FROM users WHERE active = true AND org_id = 42
+Statement Kind:       SELECT
+Cacheable:            YES (Eligible for < 0.5ms acceleration)
+Normalized Template:  select id, name from users where active = true and org_id = ?
+Deterministic Key:    87aee7c223d2cc1fa3bd602ba71d1c5514e22ca2d49b49c8d30ea6e8707e6f7a
+Target LRU Shard:     Shard #6 (of 16 striped shards)
+Dependent Tables:     [users public.users]
+=================================================
+```
+
+---
+
 ## Invalidation Matrix
 
 | SQL Statement | Proxy Action |
 | :--- | :--- |
-| `SELECT ... FROM users WHERE id = 1` | Check cache. If HIT, return in under 0.5ms. If MISS, forward to PG, store result frames, and return. |
-| `UPDATE users SET name = 'Bob' ...` | Forward to upstream PG. On `CommandComplete`, immediately purge all cached queries dependent on table `users`. |
+| `SELECT ... FROM users WHERE id = 1` | Check cache. If HIT, return in under 0.5ms. If MISS, run singleflight forward to PG, store result frames, and return. |
+| `UPDATE users SET name = 'Bob' ...` | Forward to upstream PG. On `CommandComplete`, immediately purge all cached queries dependent on table `users` and record churn metrics. |
 | `INSERT INTO orders ...` | Forward to upstream PG. Purge all cached queries dependent on table `orders`. |
 | `DELETE FROM sessions ...` | Forward to upstream PG. Purge all cached queries dependent on table `sessions`. |
 | `TRUNCATE TABLE logs` | Forward to upstream PG. Purge all cached queries dependent on table `logs`. |
@@ -140,8 +171,30 @@ Open the Query Cockpit in your browser at `http://localhost:8080`.
 | `-cache-mem-mb` | `SQLLOOM_CACHE_MAX_MEMORY_MB` | `32` | Maximum cache memory limit in megabytes |
 | `-cache-entries` | `SQLLOOM_CACHE_MAX_ENTRIES` | `10000` | Maximum number of cached query entries |
 | `-ttl` | `SQLLOOM_DEFAULT_TTL_SEC` | `3600` | Default cache entry TTL in seconds (0 for indefinite until write invalidation) |
+| `-grace-mode` | `SQLLOOM_GRACE_MODE` | `true` | Serve stale cache when upstream PostgreSQL is unreachable or slow |
 | `-disable-cache` | `SQLLOOM_DISABLE_CACHE` | `false` | Run in pure pass-through proxy mode |
 | `-verbose` | `SQLLOOM_VERBOSE` | `false` | Enable verbose protocol debug logs |
+
+---
+
+## REST API Endpoints
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/healthz` | GET | Health probe with uptime, memory, entries, and connection counts |
+| `/metrics` | GET | Standard Prometheus exposition format |
+| `/api/stats` | GET | JSON counters for hits, misses, saved time, and traffic |
+| `/api/queries/recent` | GET | Last 150 processed queries |
+| `/api/tables` | GET | Active tracked tables and their cached query counts |
+| `/api/cache/purge` | POST | 1-Click manual table or global cache flush |
+| `/api/rules` | GET | Snapshot of active table exclusions, custom TTLs, and regex rules |
+| `/api/rules/exclude` | POST/DELETE | Add or remove a table from cache exclusion list |
+| `/api/rules/ttl` | POST | Set custom TTL in seconds for a specific table |
+| `/api/rules/pattern` | POST/DELETE | Add or delete a regex routing rule |
+| `/api/invalidation/history`| GET | Log of recent write invalidation operations and impact |
+| `/api/churn/recommendations`| GET | Warnings and recommendations for high-churn tables |
+| `/api/benchmark/run` | POST | Execute a concurrent smoke benchmark with custom parameters |
+| `/api/events` | GET | Server-Sent Events (SSE) query stream for real-time UI updates |
 
 ---
 
@@ -151,6 +204,7 @@ Full benchmark methodology and raw figures are documented in [docs/BENCHMARK.md]
 
 - **Cache Hit Latency**: 0.24ms p50 (vs 14.80ms upstream PostgreSQL).
 - **Throughput**: 41,200 QPS on cached workloads (10x boost over unaccelerated baseline).
+- **Thundering Herd Suppression**: SingleFlight collapses concurrent cache misses to a single upstream query.
 - **Memory Footprint**: 28.5 MB resident memory under 10,000 active cached queries.
 - **Write Invalidation Overhead**: under 0.08 milliseconds.
 

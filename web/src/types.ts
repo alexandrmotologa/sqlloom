@@ -36,3 +36,45 @@ export interface HealthStatus {
   entries: number;
   connections: number;
 }
+
+export interface PatternRule {
+  id: string;
+  pattern: string;
+  action: 'BYPASS' | 'CACHE';
+  ttl_sec?: number;
+}
+
+export interface RulesSummary {
+  excluded_tables: string[];
+  table_ttls: Record<string, number>;
+  patterns: PatternRule[];
+}
+
+export interface InvalidationRecord {
+  id: string;
+  table: string;
+  operation: string;
+  evicted_count: number;
+  duration_ms: number;
+  timestamp: string;
+}
+
+export interface ChurnRecommendation {
+  table: string;
+  writes_per_min: number;
+  severity: 'HIGH' | 'MEDIUM';
+  message: string;
+}
+
+export interface BenchmarkResult {
+  total_queries: number;
+  duration_ms: number;
+  throughput_qps: number;
+  cache_hits: number;
+  cache_misses: number;
+  hit_ratio_pct: number;
+  p50_latency_ms: number;
+  p99_latency_ms: number;
+  min_latency_ms: number;
+  max_latency_ms: number;
+}

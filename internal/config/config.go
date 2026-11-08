@@ -16,6 +16,7 @@ type Config struct {
 	DefaultTTLSec    int
 	Verbose          bool
 	DisableCache     bool
+	GraceMode        bool
 }
 
 // LoadConfig parses CLI flags and environment variables.
@@ -29,6 +30,7 @@ func LoadConfig() *Config {
 		DefaultTTLSec:    getEnvInt("SQLLOOM_DEFAULT_TTL_SEC", 3600),
 		Verbose:          getEnvBool("SQLLOOM_VERBOSE", false),
 		DisableCache:     getEnvBool("SQLLOOM_DISABLE_CACHE", false),
+		GraceMode:        getEnvBool("SQLLOOM_GRACE_MODE", true),
 	}
 
 	flag.StringVar(&cfg.ListenAddr, "listen", cfg.ListenAddr, "TCP address to listen on for client PostgreSQL connections")
@@ -39,6 +41,7 @@ func LoadConfig() *Config {
 	flag.IntVar(&cfg.DefaultTTLSec, "ttl", cfg.DefaultTTLSec, "Default cache entry TTL in seconds (0 for indefinite until invalidated)")
 	flag.BoolVar(&cfg.Verbose, "verbose", cfg.Verbose, "Enable verbose debug logging")
 	flag.BoolVar(&cfg.DisableCache, "disable-cache", cfg.DisableCache, "Disable caching engine (pure pass-through proxy mode)")
+	flag.BoolVar(&cfg.GraceMode, "grace-mode", cfg.GraceMode, "Serve stale cache when upstream PostgreSQL is unreachable or slow")
 
 	flag.Parse()
 	return cfg

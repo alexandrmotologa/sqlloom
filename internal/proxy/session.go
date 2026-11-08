@@ -44,6 +44,8 @@ type Session struct {
 	invalidator        *cache.Invalidator
 	metrics            *telemetry.Metrics
 	hub                *telemetry.EventHub
+	singleflight       *SingleFlightGroup
+	tracker            *telemetry.InvalidationTracker
 }
 
 // NewSession initializes a client session handler.
@@ -54,23 +56,27 @@ func NewSession(
 	invalidator *cache.Invalidator,
 	metrics *telemetry.Metrics,
 	hub *telemetry.EventHub,
+	singleflight *SingleFlightGroup,
+	tracker *telemetry.InvalidationTracker,
 ) *Session {
 	if tcp, ok := conn.(*net.TCPConn); ok {
 		_ = tcp.SetNoDelay(true)
 	}
 
 	return &Session{
-		cfg:           cfg,
-		clientConn:    conn,
-		clientReader:  wire.NewReader(conn),
-		clientWriter:  wire.NewWriter(conn),
-		txStatus:      wire.TxStatusIdle,
+		cfg:          cfg,
+		clientConn:   conn,
+		clientReader: wire.NewReader(conn),
+		clientWriter: wire.NewWriter(conn),
+		txStatus:     wire.TxStatusIdle,
 		preparedStmts: make(map[string]*PreparedStatement),
 		portals:       make(map[string]*Portal),
-		cache:         cache,
-		invalidator:   invalidator,
-		metrics:       metrics,
-		hub:           hub,
+		cache:        cache,
+		invalidator:  invalidator,
+		metrics:      metrics,
+		hub:          hub,
+		singleflight: singleflight,
+		tracker:      tracker,
 	}
 }
 

@@ -139,6 +139,24 @@ func EvaluateCacheability(sql string, txStatus byte) CacheDecision {
 		}
 	}
 
+	// Rule 7: Declarative user policies (table exclusions, regex rules, custom TTL)
+	if forcedBypass, reason, customTTL := GlobalRules.EvaluateRules(sql, lowerNorm, ref.Tables); forcedBypass {
+		return CacheDecision{
+			Cacheable: false,
+			Reason:    reason,
+			Kind:      StmtSelect,
+			Tables:    ref.Tables,
+		}
+	} else if customTTL > 0 {
+		return CacheDecision{
+			Cacheable: true,
+			Reason:    "cacheable",
+			Kind:      StmtSelect,
+			Tables:    ref.Tables,
+			CustomTTL: customTTL,
+		}
+	}
+
 	return CacheDecision{
 		Cacheable: true,
 		Reason:    "cacheable",

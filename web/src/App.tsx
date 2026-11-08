@@ -1,21 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Layers, Activity, Table as TableIcon, Terminal } from 'lucide-react';
+import {
+  Layers,
+  Activity,
+  Table as TableIcon,
+  Terminal,
+  ShieldAlert,
+  History,
+  Gauge,
+} from 'lucide-react';
 import { MetricCards } from './components/MetricCards';
 import { QueryStream } from './components/QueryStream';
 import { TableMap } from './components/TableMap';
 import { QueryDetail } from './components/QueryDetail';
 import { EvictionControl } from './components/EvictionControl';
-import { Stats, TableStat, QueryEvent } from './types';
+import { RulesManager } from './components/RulesManager';
+import { InvalidationView } from './components/InvalidationView';
+import { SmokeBenchmarkModal } from './components/SmokeBenchmarkModal';
+import {
+  Stats,
+  TableStat,
+  QueryEvent,
+  RulesSummary,
+  InvalidationRecord,
+  ChurnRecommendation,
+} from './types';
 
 export function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [tables, setTables] = useState<TableStat[]>([]);
   const [events, setEvents] = useState<QueryEvent[]>([]);
-  const [selectedQuery, setSelectedQuery] = useState<QueryEvent | null>(null);
-  const [activeTab, setActiveTab] = useState<'stream' | 'tables'>('stream');
-  const [connected, setConnected] = useState(false);
+  const [rules, setRules] = useState<RulesSummary | null>(null);
+  const [invalidationHistory, setInvalidationHistory] = useState<InvalidationRecord[]>([]);
+  const [churnRecs, setChurnRecs] = useState<ChurnRecommendation[]>([]);
 
-  // Fetch stats and tables
+  const [selectedQuery, setSelectedQuery] = useState<QueryEvent | null>(null);
+  const [activeTab, setActiveTab] = useState<'stream' | 'tables' | 'rules' | 'invalidations'>('stream');
+  const [connected, setConnected] = useState(false);
+  const [isBenchmarkOpen, setIsBenchmarkOpen] = useState(false);
+
+  // Fetch core stats & tables
   const fetchStats = useCallback(async () => {
     try {
       const [resStats, resTables] = await Promise.all([
@@ -31,7 +54,32 @@ export function App() {
         setTables(data);
       }
     } catch {
-      // Backend may be starting or offline
+      // Backend starting or offline
+    }
+  }, []);
+
+  // Fetch rules & invalidations
+  const fetchAdvancedData = useCallback(async () => {
+    try {
+      const [resRules, resInv, resChurn] = await Promise.all([
+        fetch('/api/rules'),
+        fetch('/api/invalidation/history'),
+        fetch('/api/churn/recommendations'),
+      ]);
+      if (resRules.ok) {
+        const data = await resRules.json();
+        setRules(data);
+      }
+      if (resInv.ok) {
+        const data = await resInv.json();
+        setInvalidationHistory(data);
+      }
+      if (resChurn.ok) {
+        const data = await resChurn.json();
+        setChurnRecs(data);
+      }
+    } catch {
+      // Ignore
     }
   }, []);
 
@@ -42,7 +90,6 @@ export function App() {
       if (res.ok) {
         const data: QueryEvent[] = await res.json();
         if (Array.isArray(data)) {
-          // Reverse so newest is first
           setEvents(data.reverse());
         }
       }
@@ -54,9 +101,13 @@ export function App() {
   useEffect(() => {
     fetchStats();
     fetchRecent();
-    const interval = setInterval(fetchStats, 2000);
+    fetchAdvancedData();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchAdvancedData();
+    }, 2500);
     return () => clearInterval(interval);
-  }, [fetchStats, fetchRecent]);
+  }, [fetchStats, fetchRecent, fetchAdvancedData]);
 
   // Subscribe to SSE real-time query stream
   useEffect(() => {
@@ -70,7 +121,6 @@ export function App() {
       try {
         const evt: QueryEvent = JSON.parse(msg.data);
         setEvents((prev) => [evt, ...prev.slice(0, 199)]);
-        // Incrementally update hits/misses
         setStats((prev) => {
           if (!prev) return prev;
           const hits = evt.status === 'HIT' ? prev.cache_hits + 1 : prev.cache_hits;
@@ -86,7 +136,7 @@ export function App() {
           };
         });
       } catch {
-        // Ping or non-json frame
+        // Ping
       }
     };
 
@@ -106,6 +156,7 @@ export function App() {
       body: JSON.stringify({ table: tableName }),
     });
     await fetchStats();
+    await fetchAdvancedData();
   };
 
   const handlePurgeAll = async (): Promise<number> => {
@@ -117,9 +168,19 @@ export function App() {
     if (res.ok) {
       const data = await res.json();
       await fetchStats();
+      await fetchAdvancedData();
       return data.evicted_count || 0;
     }
     return 0;
+  };
+
+  const handleExcludeTable = async (table: string) => {
+    await fetch('/api/rules/exclude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table, exclude: true }),
+    });
+    await fetchAdvancedData();
   };
 
   return (
@@ -135,7 +196,7 @@ export function App() {
               <div className="flex items-center space-x-2">
                 <span className="font-bold text-white tracking-tight text-base">sqlloom</span>
                 <span className="text-[10px] font-mono font-medium px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  v1.0.0
+                  v1.1.0
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -144,7 +205,16 @@ export function App() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            {/* Smoke Benchmark Button */}
+            <button
+              onClick={() => setIsBenchmarkOpen(true)}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Gauge className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Smoke Benchmark</span>
+            </button>
+
             {/* Live SSE status indicator */}
             <div className="flex items-center space-x-2 text-xs font-mono bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
               <span className="relative flex h-2 w-2">
@@ -174,7 +244,7 @@ export function App() {
               href="/metrics"
               target="_blank"
               rel="noreferrer"
-              className="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+              className="text-xs font-mono text-indigo-400 hover:text-indigo-300 transition-colors hidden sm:inline"
             >
               /metrics
             </a>
@@ -192,10 +262,10 @@ export function App() {
 
         {/* Tab Switcher & Views */}
         <div className="space-y-4">
-          <div className="flex border-b border-slate-800 space-x-6 text-xs font-semibold uppercase tracking-wider">
+          <div className="flex border-b border-slate-800 space-x-6 text-xs font-semibold uppercase tracking-wider overflow-x-auto pb-px">
             <button
               onClick={() => setActiveTab('stream')}
-              className={`pb-3 flex items-center space-x-2 transition-colors relative ${
+              className={`pb-3 flex items-center space-x-2 transition-colors relative whitespace-nowrap ${
                 activeTab === 'stream'
                   ? 'text-indigo-400'
                   : 'text-slate-400 hover:text-slate-200'
@@ -210,30 +280,83 @@ export function App() {
 
             <button
               onClick={() => setActiveTab('tables')}
-              className={`pb-3 flex items-center space-x-2 transition-colors relative ${
+              className={`pb-3 flex items-center space-x-2 transition-colors relative whitespace-nowrap ${
                 activeTab === 'tables'
                   ? 'text-indigo-400'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <TableIcon className="w-4 h-4" />
-              <span>Table Dependency Map ({tables.length})</span>
+              <span>Table Map ({tables.length})</span>
               {activeTab === 'tables' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('rules')}
+              className={`pb-3 flex items-center space-x-2 transition-colors relative whitespace-nowrap ${
+                activeTab === 'rules'
+                  ? 'text-indigo-400'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              <span>Rules & Policies</span>
+              {activeTab === 'rules' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('invalidations')}
+              className={`pb-3 flex items-center space-x-2 transition-colors relative whitespace-nowrap ${
+                activeTab === 'invalidations'
+                  ? 'text-indigo-400'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              <span>Invalidations & Churn</span>
+              {churnRecs.length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+              )}
+              {activeTab === 'invalidations' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
               )}
             </button>
           </div>
 
-          {activeTab === 'stream' ? (
+          {activeTab === 'stream' && (
             <QueryStream events={events} onSelectQuery={setSelectedQuery} />
-          ) : (
+          )}
+
+          {activeTab === 'tables' && (
             <TableMap tables={tables} onPurgeTable={handlePurgeTable} />
+          )}
+
+          {activeTab === 'rules' && (
+            <RulesManager rules={rules} onRefresh={fetchAdvancedData} />
+          )}
+
+          {activeTab === 'invalidations' && (
+            <InvalidationView
+              history={invalidationHistory}
+              recommendations={churnRecs}
+              onExcludeTable={handleExcludeTable}
+            />
           )}
         </div>
       </main>
 
       {/* Query Detail Modal */}
       <QueryDetail query={selectedQuery} onClose={() => setSelectedQuery(null)} />
+
+      {/* Smoke Benchmark Modal */}
+      <SmokeBenchmarkModal
+        isOpen={isBenchmarkOpen}
+        onClose={() => setIsBenchmarkOpen(false)}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-800/80 py-4 text-center text-xs text-slate-400 font-mono">

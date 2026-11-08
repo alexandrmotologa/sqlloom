@@ -9,15 +9,18 @@ import (
 	"time"
 
 	"github.com/alexandrmotologa/sqlloom/internal/cache"
+	"github.com/alexandrmotologa/sqlloom/internal/parser"
 )
 
 // HTTPServer exposes metrics, health endpoints, and the embedded Cockpit UI.
 type HTTPServer struct {
 	addr        string
+	proxyAddr   string
 	metrics     *Metrics
 	hub         *EventHub
 	cache       *cache.ShardedLRU
 	invalidator *cache.Invalidator
+	tracker     *InvalidationTracker
 	embeddedUI  fs.FS
 	startTime   time.Time
 }
@@ -25,6 +28,7 @@ type HTTPServer struct {
 // NewHTTPServer initializes the web telemetry and cockpit server.
 func NewHTTPServer(
 	addr string,
+	proxyAddr string,
 	metrics *Metrics,
 	hub *EventHub,
 	cache *cache.ShardedLRU,
@@ -33,10 +37,12 @@ func NewHTTPServer(
 ) *HTTPServer {
 	return &HTTPServer{
 		addr:        addr,
+		proxyAddr:   proxyAddr,
 		metrics:     metrics,
 		hub:         hub,
 		cache:       cache,
 		invalidator: invalidator,
+		tracker:     GlobalInvalidationTracker,
 		embeddedUI:  embeddedUI,
 		startTime:   time.Now(),
 	}
@@ -57,11 +63,23 @@ func (s *HTTPServer) Start() error {
 	mux.HandleFunc("/api/cache/purge", s.handlePurge)
 	mux.HandleFunc("/api/events", s.handleEvents)
 
+	// Declarative Rules API
+	mux.HandleFunc("/api/rules", s.handleGetRules)
+	mux.HandleFunc("/api/rules/exclude", s.handleRuleExclude)
+	mux.HandleFunc("/api/rules/ttl", s.handleRuleTTL)
+	mux.HandleFunc("/api/rules/pattern", s.handleRulePattern)
+
+	// Invalidation History & Churn API
+	mux.HandleFunc("/api/invalidation/history", s.handleInvalidationHistory)
+	mux.HandleFunc("/api/churn/recommendations", s.handleChurnRecommendations)
+
+	// Benchmark Load Generator API
+	mux.HandleFunc("/api/benchmark/run", s.handleBenchmarkRun)
+
 	// Embedded Static Cockpit Web UI
 	if s.embeddedUI != nil {
 		fileServer := http.FileServer(http.FS(s.embeddedUI))
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			// If not an API request, serve SPA index.html for unknown routes
 			path := strings.TrimPrefix(r.URL.Path, "/")
 			if path == "" {
 				fileServer.ServeHTTP(w, r)
@@ -69,7 +87,7 @@ func (s *HTTPServer) Start() error {
 			}
 			f, err := s.embeddedUI.Open(path)
 			if err != nil {
-				// Fallback to index.html for client-side routing
+				// Fallback to index.html for client-side SPA routing
 				r.URL.Path = "/"
 				fileServer.ServeHTTP(w, r)
 				return
@@ -88,7 +106,7 @@ func (s *HTTPServer) Start() error {
 		Addr:         s.addr,
 		Handler:      corsMiddleware(mux),
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 0, // Zero to allow long-lived SSE connections
+		WriteTimeout: 0,
 	}
 
 	go func() {
@@ -174,8 +192,10 @@ func (s *HTTPServer) handlePurge(w http.ResponseWriter, r *http.Request) {
 	evictedCount := 0
 	if req.All {
 		evictedCount = s.invalidator.PurgeAll()
+		s.tracker.RecordInvalidation("*", "MANUAL_FLUSH", evictedCount, 0.1)
 	} else if req.Table != "" {
 		evictedCount = s.invalidator.PurgeTable(req.Table)
+		s.tracker.RecordInvalidation(req.Table, "MANUAL_PURGE", evictedCount, 0.1)
 	}
 
 	s.metrics.Invalidations.Add(1)
@@ -186,6 +206,136 @@ func (s *HTTPServer) handlePurge(w http.ResponseWriter, r *http.Request) {
 		"success":       true,
 		"evicted_count": evictedCount,
 	})
+}
+
+func (s *HTTPServer) handleGetRules(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(parser.GlobalRules.GetSummary())
+}
+
+func (s *HTTPServer) handleRuleExclude(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Table   string `json:"table"`
+		Exclude bool   `json:"exclude"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	if req.Exclude || r.Method == http.MethodPost {
+		parser.GlobalRules.ExcludeTable(req.Table)
+		// Purge any existing cached items for this excluded table
+		_ = s.invalidator.PurgeTable(req.Table)
+	} else {
+		parser.GlobalRules.IncludeTable(req.Table)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (s *HTTPServer) handleRuleTTL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Table  string `json:"table"`
+		TTLSec int    `json:"ttl_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	parser.GlobalRules.SetTableTTL(req.Table, req.TTLSec)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+}
+
+func (s *HTTPServer) handleRulePattern(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete {
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+		parser.GlobalRules.RemovePatternRule(req.ID)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"success": true})
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID      string `json:"id"`
+		Pattern string `json:"pattern"`
+		Action  string `json:"action"`
+		TTLSec  int    `json:"ttl_sec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	if req.ID == "" {
+		req.ID = fmt.Sprintf("pat-%d", time.Now().UnixNano())
+	}
+
+	if err := parser.GlobalRules.AddPatternRule(req.ID, req.Pattern, req.Action, req.TTLSec); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"success": true, "id": req.ID})
+}
+
+func (s *HTTPServer) handleInvalidationHistory(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.tracker.GetHistory())
+}
+
+func (s *HTTPServer) handleChurnRecommendations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(s.tracker.GetRecommendations())
+}
+
+func (s *HTTPServer) handleBenchmarkRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var params BenchmarkParams
+	_ = json.NewDecoder(r.Body).Decode(&params)
+
+	targetAddr := s.proxyAddr
+	if strings.HasPrefix(targetAddr, ":") {
+		targetAddr = "127.0.0.1" + targetAddr
+	}
+
+	result, err := RunSmokeBenchmark(targetAddr, params)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("benchmark failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(result)
 }
 
 func (s *HTTPServer) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +352,6 @@ func (s *HTTPServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 	ch := s.hub.Subscribe()
 	defer s.hub.Unsubscribe(ch)
 
-	// Send initial ping
 	_, _ = fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 
@@ -227,7 +376,7 @@ func (s *HTTPServer) handleEvents(w http.ResponseWriter, r *http.Request) {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		if r.Method == http.MethodOptions {
