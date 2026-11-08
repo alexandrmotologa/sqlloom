@@ -112,8 +112,10 @@ func (r *Router) serveCachedEntry(entry *cache.CacheEntry, rawSQL, normSQL strin
 	elapsedMs := float64(elapsed.Microseconds()) / 1000.0
 
 	r.session.metrics.CacheHits.Add(1)
-	// Track latency saved compared to typical 15ms database roundtrip
-	r.session.metrics.SavedLatencyMicros.Add(15000 - elapsed.Microseconds())
+	savedMicros := entry.UpstreamDurationMicros - elapsed.Microseconds()
+	if savedMicros > 0 {
+		r.session.metrics.SavedLatencyMicros.Add(savedMicros)
+	}
 
 	r.session.hub.Broadcast(telemetry.QueryEvent{
 		SQL:        rawSQL,
@@ -194,6 +196,7 @@ func (r *Router) executeAndCacheSimpleQuery(
 					commandComplete,
 					ttl,
 				)
+				createdEntry.UpstreamDurationMicros = elapsed.Microseconds()
 				r.session.invalidator.Register(createdEntry)
 			}
 

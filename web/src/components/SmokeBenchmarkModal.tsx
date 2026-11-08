@@ -11,6 +11,8 @@ export const SmokeBenchmarkModal: React.FC<SmokeBenchmarkModalProps> = ({ isOpen
   const [totalQueries, setTotalQueries] = useState(400);
   const [concurrency, setConcurrency] = useState(8);
   const [writeRatio, setWriteRatio] = useState(0.1);
+  const [table, setTable] = useState('users');
+  const [database, setDatabase] = useState('');
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<BenchmarkResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +32,8 @@ export const SmokeBenchmarkModal: React.FC<SmokeBenchmarkModalProps> = ({ isOpen
           total_queries: totalQueries,
           concurrency: concurrency,
           write_ratio: writeRatio,
+          table: table.trim() || undefined,
+          database: database.trim() || undefined,
         }),
       });
 
@@ -125,6 +129,34 @@ export const SmokeBenchmarkModal: React.FC<SmokeBenchmarkModalProps> = ({ isOpen
                 <option value={0.1}>10% Writes</option>
                 <option value={0.25}>25% Writes</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">
+                Target Table
+              </label>
+              <input
+                type="text"
+                placeholder="users (default)"
+                value={table}
+                onChange={(e) => setTable(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">
+                Database (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="postgres (default)"
+                value={database}
+                onChange={(e) => setDatabase(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+              />
             </div>
           </div>
 

@@ -17,6 +17,9 @@ type BenchmarkParams struct {
 	TotalQueries int     `json:"total_queries"`
 	Concurrency  int     `json:"concurrency"`
 	WriteRatio   float64 `json:"write_ratio"` // e.g. 0.1 = 10% writes, 90% reads
+	Database     string  `json:"database,omitempty"`
+	User         string  `json:"user,omitempty"`
+	Table        string  `json:"table,omitempty"`
 }
 
 // BenchmarkResult holds latency and throughput statistics.
@@ -50,6 +53,16 @@ func RunSmokeBenchmark(proxyAddr string, params BenchmarkParams) (*BenchmarkResu
 	if params.WriteRatio < 0 || params.WriteRatio > 0.5 {
 		params.WriteRatio = 0.1
 	}
+	if params.Database == "" {
+		params.Database = "postgres"
+	}
+	if params.User == "" {
+		params.User = "postgres"
+	}
+	targetTable := params.Table
+	if targetTable == "" {
+		targetTable = "users"
+	}
 
 	queriesPerWorker := params.TotalQueries / params.Concurrency
 
@@ -68,7 +81,7 @@ func RunSmokeBenchmark(proxyAddr string, params BenchmarkParams) (*BenchmarkResu
 		go func(wid int) {
 			defer wg.Done()
 
-			conn, reader, writer, err := dialBenchClient(proxyAddr)
+			conn, reader, writer, err := dialBenchClient(proxyAddr, params.Database, params.User)
 			if err != nil {
 				return
 			}
@@ -81,17 +94,9 @@ func RunSmokeBenchmark(proxyAddr string, params BenchmarkParams) (*BenchmarkResu
 				isWrite := localRng.Float64() < params.WriteRatio
 
 				if isWrite {
-					sql = fmt.Sprintf("UPDATE users SET active = true WHERE id = %d", localRng.Intn(5)+1)
+					sql = fmt.Sprintf("UPDATE %s SET active = true WHERE id = %d", targetTable, localRng.Intn(5)+1)
 				} else {
-					target := localRng.Intn(3)
-					switch target {
-					case 0:
-						sql = fmt.Sprintf("SELECT * FROM users WHERE id = %d", localRng.Intn(8)+1)
-					case 1:
-						sql = fmt.Sprintf("SELECT id, name, price FROM products WHERE category_id = %d", localRng.Intn(4)+1)
-					default:
-						sql = fmt.Sprintf("SELECT * FROM orders WHERE user_id = %d", localRng.Intn(6)+1)
-					}
+					sql = fmt.Sprintf("SELECT * FROM %s WHERE id = %d", targetTable, localRng.Intn(10)+1)
 				}
 
 				t0 := time.Now()
@@ -166,7 +171,7 @@ func RunSmokeBenchmark(proxyAddr string, params BenchmarkParams) (*BenchmarkResu
 	}, nil
 }
 
-func dialBenchClient(proxyAddr string) (net.Conn, *wire.Reader, *wire.Writer, error) {
+func dialBenchClient(proxyAddr, database, user string) (net.Conn, *wire.Reader, *wire.Writer, error) {
 	conn, err := net.DialTimeout("tcp", proxyAddr, 2*time.Second)
 	if err != nil {
 		return nil, nil, nil, err
@@ -195,7 +200,7 @@ func dialBenchClient(proxyAddr string) (net.Conn, *wire.Reader, *wire.Writer, er
 	var proto [4]byte
 	binary.BigEndian.PutUint32(proto[:], uint32(wire.ProtocolVersion30))
 	startupPayload = append(startupPayload, proto[:]...)
-	startupPayload = append(startupPayload, []byte("user\x00postgres\x00database\x00benchdb\x00\x00")...)
+	startupPayload = append(startupPayload, []byte("user\x00"+user+"\x00database\x00"+database+"\x00\x00")...)
 
 	var startupLen [4]byte
 	binary.BigEndian.PutUint32(startupLen[:], uint32(len(startupPayload)+4))

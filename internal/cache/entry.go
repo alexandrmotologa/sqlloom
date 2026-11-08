@@ -8,17 +8,18 @@ import (
 
 // CacheEntry stores a cached PostgreSQL result set and metadata.
 type CacheEntry struct {
-	Key             string
-	Query           string
-	Tables          []string
-	RowDescription  wire.RawMessage
-	DataRows        []wire.RawMessage
-	CommandComplete wire.RawMessage
-	SizeBytes       int64
-	CreatedAt       time.Time
-	ExpiresAt       time.Time
-	HitCount        int64
-	LastAccessed    time.Time
+	Key                    string
+	Query                  string
+	Tables                 []string
+	RowDescription         wire.RawMessage
+	DataRows               []wire.RawMessage
+	CommandComplete        wire.RawMessage
+	SizeBytes              int64
+	UpstreamDurationMicros int64
+	CreatedAt              time.Time
+	ExpiresAt              time.Time
+	HitCount               int64
+	LastAccessed           time.Time
 }
 
 // NewCacheEntry constructs an entry and computes its memory footprint.
