@@ -162,7 +162,7 @@ func (s *HTTPServer) handleTables(w http.ResponseWriter, r *http.Request) {
 		CachedCounts int    `json:"cached_queries"`
 	}
 
-	var list []tableInfo
+	list := make([]tableInfo, 0)
 	for name, count := range stats {
 		list = append(list, tableInfo{
 			Name:         name,

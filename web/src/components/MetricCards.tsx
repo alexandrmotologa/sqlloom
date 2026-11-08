@@ -24,7 +24,7 @@ export const MetricCards: React.FC<MetricCardsProps> = ({ stats }) => {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {/* Hit Ratio */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group">
         <div className="flex items-center justify-between text-slate-400 mb-2">

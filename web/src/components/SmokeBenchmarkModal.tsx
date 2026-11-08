@@ -85,7 +85,7 @@ export const SmokeBenchmarkModal: React.FC<SmokeBenchmarkModalProps> = ({ isOpen
         {/* Content */}
         <div className="py-5 space-y-5">
           {/* Controls */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-slate-400 block mb-1">
                 Total Queries
@@ -132,7 +132,7 @@ export const SmokeBenchmarkModal: React.FC<SmokeBenchmarkModalProps> = ({ isOpen
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 block mb-1">
                 Target Table

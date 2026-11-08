@@ -16,7 +16,7 @@ export const QueryStream: React.FC<QueryStreamProps> = ({ events, onSelectQuery 
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchSQL = e.sql.toLowerCase().includes(q);
-      const matchTable = e.tables.some((t) => t.toLowerCase().includes(q));
+      const matchTable = (e.tables || []).some((t) => t.toLowerCase().includes(q));
       if (!matchSQL && !matchTable) return false;
     }
     return true;
@@ -136,7 +136,7 @@ export const QueryStream: React.FC<QueryStreamProps> = ({ events, onSelectQuery 
                     {evt.sql}
                   </p>
                   <div className="flex items-center space-x-2 mt-1">
-                    {evt.tables.map((t) => (
+                    {(evt.tables || []).map((t) => (
                       <span
                         key={t}
                         className="text-[10px] bg-slate-800/80 text-slate-400 px-1.5 py-0.2 rounded"

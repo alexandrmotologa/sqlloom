@@ -101,7 +101,7 @@ export const QueryDetail: React.FC<QueryDetailProps> = ({ query, onClose }) => {
               Referenced Table Dependencies
             </label>
             <div className="flex flex-wrap gap-2">
-              {query.tables.length === 0 ? (
+              {(!query.tables || query.tables.length === 0) ? (
                 <span className="text-xs text-slate-500 italic">No table dependencies (standalone expression)</span>
               ) : (
                 query.tables.map((tbl) => (

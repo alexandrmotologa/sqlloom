@@ -51,7 +51,7 @@ export function App() {
       }
       if (resTables.ok) {
         const data = await resTables.json();
-        setTables(data);
+        setTables(Array.isArray(data) ? data : []);
       }
     } catch {
       // Backend starting or offline
@@ -72,11 +72,11 @@ export function App() {
       }
       if (resInv.ok) {
         const data = await resInv.json();
-        setInvalidationHistory(data);
+        setInvalidationHistory(Array.isArray(data) ? data : []);
       }
       if (resChurn.ok) {
         const data = await resChurn.json();
-        setChurnRecs(data);
+        setChurnRecs(Array.isArray(data) ? data : []);
       }
     } catch {
       // Ignore
@@ -287,7 +287,7 @@ export function App() {
               }`}
             >
               <TableIcon className="w-4 h-4" />
-              <span>Table Map ({tables.length})</span>
+              <span>Table Map ({(tables || []).length})</span>
               {activeTab === 'tables' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
               )}
@@ -318,7 +318,7 @@ export function App() {
             >
               <History className="w-4 h-4" />
               <span>Invalidations & Churn</span>
-              {churnRecs.length > 0 && (
+              {(churnRecs || []).length > 0 && (
                 <span className="w-2 h-2 rounded-full bg-amber-400" />
               )}
               {activeTab === 'invalidations' && (

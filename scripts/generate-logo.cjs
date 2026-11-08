@@ -1,0 +1,271 @@
+const fs = require('fs');
+const path = require('path');
+const { Resvg } = require('B:/workgit/flagforge/node_modules/@resvg/resvg-js');
+
+function buildLogoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Luxury Squircle Clip -->
+    <clipPath id="squircle-clip">
+      <rect x="24" y="24" width="976" height="976" rx="220" />
+    </clipPath>
+
+    <!-- Electric Cyan Wire Acceleration Vector -->
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="40%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <!-- Emerald Invalidation Core Vector -->
+    <linearGradient id="sync-emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="60%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Amber Read Cache Accent -->
+    <linearGradient id="accent-amber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="60%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <!-- Eye Iris Gradients -->
+    <linearGradient id="eye-glow-r" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <linearGradient id="eye-glow-l" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <!-- Volumetric Obsidian & Slate Lighting Gradients -->
+    <linearGradient id="g-bright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+
+    <linearGradient id="g-lit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <linearGradient id="g-mid-lit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="g-mid" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="g-shadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <linearGradient id="g-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#060913"/>
+    </linearGradient>
+
+    <filter id="subtle-shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#000000" flood-opacity="0.16" />
+    </filter>
+  </defs>
+
+  <!-- Luxury White Squircle Container -->
+  <rect x="24" y="24" width="976" height="976" rx="220" fill="#ffffff" stroke="#e2e8f0" stroke-width="6" />
+
+  <g clip-path="url(#squircle-clip)">
+    <g transform="translate(512, 512)" filter="url(#subtle-shadow)">
+
+      <!-- Hexagonal Architectural Gateway Frame -->
+      <polygon points="
+        0,-390
+        338,-195
+        338,195
+        0,390
+        -338,195
+        -338,-195
+      " fill="none" stroke="#0f172a" stroke-width="36" stroke-linejoin="round" />
+
+      <!-- Inner Telemetry Dashed Hexagon (Wire Protocol Mesh) -->
+      <polygon points="
+        0,-355
+        307,-177
+        307,177
+        0,355
+        -307,177
+        -307,-177
+      " fill="none" stroke="#00f5ff" stroke-width="4" opacity="0.45" stroke-dasharray="16, 12" />
+
+      <!-- Loom Warp & Weft Telemetry Vectors -->
+      <line x1="-307" y1="-177" x2="307" y2="177" stroke="#0284c7" stroke-width="2" opacity="0.25" stroke-dasharray="8, 8" />
+      <line x1="-307" y1="177" x2="307" y2="-177" stroke="#0284c7" stroke-width="2" opacity="0.25" stroke-dasharray="8, 8" />
+      <line x1="0" y1="-355" x2="0" y2="355" stroke="#00f5ff" stroke-width="2.5" opacity="0.3" stroke-dasharray="10, 10" />
+
+      <!-- 100% Watertight Solid Base Silhouette (Shadow Leopard Craniofacial Wedge) -->
+      <path d="
+        M 0,-215
+        L 60,-240 L 110,-295 L 185,-335 L 175,-220 L 160,-150 L 225,-80 L 275,-15 L 260,85 L 210,185 L 145,265 L 75,320 L 0,355
+        L -75,320 L -145,265 L -210,185 L -260,85 L -275,-15 L -225,-80 L -160,-150 L -175,-220 L -185,-335 L -110,-295 L -60,-240
+        Z
+      " fill="#080c14" />
+
+      <!-- ==================== THE SHADOW LEOPARD MASCOT ==================== -->
+
+      <!-- EARS: High Angular Stealth Radar Pinnae -->
+      <!-- Right Ear (Lit side) -->
+      <polygon points="110,-295 185,-335 155,-230" fill="url(#g-bright)" />
+      <polygon points="110,-295 155,-230 115,-200 60,-240" fill="url(#g-lit)" />
+      <!-- Right Inner Ear Acoustic Cavity (Electric Cyan Vector) -->
+      <polygon points="120,-280 165,-310 148,-240" fill="url(#cyan-glow)" />
+      <polygon points="120,-280 148,-240 125,-225" fill="#0b1329" />
+
+      <!-- Left Ear (Shadow side) -->
+      <polygon points="-110,-295 -185,-335 -155,-230" fill="url(#g-dark)" />
+      <polygon points="-110,-295 -155,-230 -115,-200 -60,-240" fill="url(#g-shadow)" />
+      <!-- Left Inner Ear Acoustic Cavity (Electric Cyan Vector) -->
+      <polygon points="-120,-280 -165,-310 -148,-240" fill="url(#cyan-glow)" opacity="0.85" />
+      <polygon points="-120,-280 -148,-240 -125,-225" fill="#050811" />
+
+      <!-- CROWN & FOREHEAD PLATES -->
+      <polygon points="0,-215 60,-240 35,-165 0,-175" fill="url(#g-bright)" />
+      <polygon points="0,-215 -60,-240 -35,-165 0,-175" fill="url(#g-shadow)" />
+      <polygon points="60,-240 115,-200 75,-155 35,-165" fill="url(#g-lit)" />
+      <polygon points="-60,-240 -115,-200 -75,-155 -35,-165" fill="url(#g-dark)" />
+
+      <!-- Forehead Central Shield -->
+      <polygon points="0,-175 35,-165 50,-105 0,-115" fill="url(#g-bright)" />
+      <polygon points="0,-175 -35,-165 -50,-105 0,-115" fill="url(#g-mid)" />
+
+      <!-- SUPRAORBITAL EYEBROW RIDGES (Sharp Predatory Slant) -->
+      <!-- Right Brow (Lit) -->
+      <polygon points="0,-115 50,-105 105,-85 45,-70" fill="url(#g-bright)" />
+      <polygon points="50,-105 75,-155 115,-200 160,-150 105,-85" fill="url(#g-lit)" />
+      <!-- Left Brow (Shadow) -->
+      <polygon points="0,-115 -50,-105 -105,-85 -45,-70" fill="url(#g-shadow)" />
+      <polygon points="-50,-105 -75,-155 -115,-200 -160,-150 -105,-85" fill="url(#g-dark)" />
+
+      <!-- PREDATOR EYES: Sharp geometric almond sockets with electric cyan luminescence -->
+      <!-- Right Eye Socket Dark Frame -->
+      <polygon points="45,-70 105,-85 118,-62 52,-52" fill="#040711" />
+      <!-- Right Eye Glowing Iris -->
+      <polygon points="50,-67 101,-81 110,-65 58,-55" fill="url(#eye-glow-r)" />
+      <!-- Right Pupil (Vertical Slit) -->
+      <polygon points="76,-76 83,-75 80,-59 73,-60" fill="#020817" />
+      <!-- Right Eye Specular Spark -->
+      <polygon points="68,-72 74,-73 72,-66 66,-65" fill="#ffffff" opacity="0.95" />
+
+      <!-- Left Eye Socket Dark Frame -->
+      <polygon points="-45,-70 -105,-85 -118,-62 -52,-52" fill="#040711" />
+      <!-- Left Eye Glowing Iris -->
+      <polygon points="-50,-67 -101,-81 -110,-65 -58,-55" fill="url(#eye-glow-l)" />
+      <!-- Left Pupil (Vertical Slit) -->
+      <polygon points="-76,-76 -83,-75 -80,-59 -73,-60" fill="#020817" />
+      <!-- Left Eye Specular Spark -->
+      <polygon points="-68,-72 -74,-73 -72,-66 -66,-65" fill="#ffffff" opacity="0.95" />
+
+      <!-- NOSE BRIDGE & MUZZLE ARCH (Wide Aerodynamic Structure) -->
+      <polygon points="0,-115 45,-70 30,-15 0,-10" fill="url(#g-lit)" />
+      <polygon points="0,-115 -45,-70 -30,-15 0,-10" fill="url(#g-shadow)" />
+
+      <!-- Nose Tip & Rhinarium (Compact Obsidian Wedge) -->
+      <polygon points="0,-10 30,-15 22,15 0,22" fill="url(#g-bright)" />
+      <polygon points="0,-10 -30,-15 -22,15 0,22" fill="url(#g-dark)" />
+      <polygon points="0,22 18,15 0,32 -18,15" fill="#090d16" />
+
+      <!-- Whisker Pads & Muzzle Fur (Horizontal Lateral Spread, Silver-Slate, NO Buck Teeth) -->
+      <polygon points="0,32 22,15 55,20 40,65 0,60" fill="url(#g-mid-lit)" />
+      <polygon points="0,32 -22,15 -55,20 -40,65 0,60" fill="url(#g-shadow)" />
+      <polygon points="22,15 30,-15 75,-10 55,20" fill="url(#g-bright)" />
+      <polygon points="-22,15 -30,-15 -75,-10 -55,20" fill="url(#g-dark)" />
+
+      <!-- Lower Jaw & Chin Flange -->
+      <polygon points="0,60 40,65 25,105 0,115" fill="url(#g-lit)" />
+      <polygon points="0,60 -40,65 -25,105 0,115" fill="url(#g-dark)" />
+
+      <!-- ZYGOMATIC CHEEKBONES & MALAR FACETS -->
+      <!-- Right Cheek (Lit) -->
+      <polygon points="105,-85 160,-150 225,-80 185,-10 118,-62" fill="url(#g-bright)" />
+      <polygon points="118,-62 185,-10 155,55 85,10 52,-52" fill="url(#g-lit)" />
+      <polygon points="52,-52 85,10 75,-10 30,-15" fill="url(#g-mid-lit)" />
+      <polygon points="85,10 155,55 125,125 40,65 55,20" fill="url(#g-bright)" />
+
+      <!-- Left Cheek (Shadow) -->
+      <polygon points="-105,-85 -160,-150 -225,-80 -185,-10 -118,-62" fill="url(#g-dark)" />
+      <polygon points="-118,-62 -185,-10 -155,55 -85,10 -52,-52" fill="url(#g-shadow)" />
+      <polygon points="-52,-52 -85,10 -75,-10 -30,-15" fill="url(#g-dark)" />
+      <polygon points="-85,10 -155,55 -125,125 -40,65 -55,20" fill="url(#g-shadow)" />
+
+      <!-- LATERAL CHEEK WINGS & OUTER FACETS (85% Hexagonal Mass) -->
+      <!-- Right Lateral Plates -->
+      <polygon points="225,-80 275,-15 215,45 185,-10" fill="url(#g-bright)" />
+      <polygon points="275,-15 260,85 205,120 215,45" fill="url(#g-lit)" />
+      <polygon points="260,85 210,185 155,185 205,120" fill="url(#g-mid-lit)" />
+      <polygon points="210,185 145,265 100,225 155,185" fill="url(#g-lit)" />
+
+      <!-- Left Lateral Plates (Shadow) -->
+      <polygon points="-225,-80 -275,-15 -215,45 -185,-10" fill="url(#g-shadow)" />
+      <polygon points="-275,-15 -260,85 -205,120 -215,45" fill="url(#g-dark)" />
+      <polygon points="-260,85 -210,185 -155,185 -205,120" fill="url(#g-shadow)" />
+      <polygon points="-210,185 -145,265 -100,225 -155,185" fill="url(#g-dark)" />
+
+      <!-- CHEST & CENTRAL WIRE ACCELERATION CORE -->
+      <!-- Throat Armor Plates -->
+      <polygon points="0,115 25,105 75,130 50,185 0,195" fill="url(#g-lit)" />
+      <polygon points="0,115 -25,105 -75,130 -50,185 0,195" fill="url(#g-shadow)" />
+
+      <!-- Central Loom Node / Rhombus Core (< 0.5ms Wire Intercept Singularity) -->
+      <polygon points="0,195 52,245 0,295 -52,245" fill="url(#cyan-glow)" />
+      <polygon points="0,208 36,245 0,282 -36,245" fill="#080d1a" />
+      <polygon points="0,222 20,245 0,268 -20,245" fill="url(#sync-emerald)" />
+      <polygon points="0,232 9,245 0,258 -9,245" fill="#ffffff" />
+
+      <!-- Pectoral Flanges -->
+      <polygon points="52,245 100,225 65,290 0,295" fill="url(#g-lit)" />
+      <polygon points="-52,245 -100,225 -65,290 0,295" fill="url(#g-shadow)" />
+      <polygon points="100,225 145,265 75,320 65,290" fill="url(#g-bright)" />
+      <polygon points="-100,225 -145,265 -75,320 -65,290" fill="url(#g-dark)" />
+
+      <!-- Symmetrical Keel Anchor -->
+      <polygon points="0,295 65,290 75,320 0,355" fill="url(#g-mid-lit)" />
+      <polygon points="0,295 -65,290 -75,320 0,355" fill="url(#g-dark)" />
+
+    </g>
+  </g>
+</svg>`;
+}
+
+async function main() {
+  const outputDir = path.resolve(__dirname, '../docs/images');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const svg = buildLogoSvg();
+  const svgPath = path.join(outputDir, 'logo.svg');
+  const pngPath = path.join(outputDir, 'logo.png');
+
+  fs.writeFileSync(svgPath, svg, 'utf8');
+  console.log('Saved SVG:', svgPath);
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: 'width', value: 1024 },
+  });
+  const pngBuffer = resvg.render().asPng();
+  fs.writeFileSync(pngPath, pngBuffer);
+  console.log('Successfully rendered logo.png (1024x1024) at:', pngPath);
+}
+
+main().catch((err) => {
+  console.error('Logo generation error:', err);
+  process.exit(1);
+});

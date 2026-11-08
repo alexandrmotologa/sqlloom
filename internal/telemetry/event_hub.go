@@ -48,6 +48,9 @@ func (h *EventHub) Broadcast(e QueryEvent) {
 	if e.ID == "" {
 		e.ID = fmt.Sprintf("evt-%d", h.seq)
 	}
+	if e.Tables == nil {
+		e.Tables = []string{}
+	}
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now()
 	}

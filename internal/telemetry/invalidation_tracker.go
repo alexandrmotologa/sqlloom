@@ -92,7 +92,7 @@ func (t *InvalidationTracker) GetRecommendations() []ChurnRecommendation {
 	now := time.Now()
 	cutoff := now.Add(-2 * time.Minute)
 
-	var recs []ChurnRecommendation
+	recs := make([]ChurnRecommendation, 0)
 
 	for tbl, timestamps := range t.tableTimestamps {
 		// Prune timestamps older than 2 minutes
