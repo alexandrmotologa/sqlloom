@@ -1,0 +1,18 @@
+# Root binary executables
+/sqlloom
+/sqlloom.exe
+*.exe
+
+# Dependencies
+node_modules/
+web/node_modules/
+vendor/
+
+# Web temp build
+web/dist/
+web/tsconfig.tsbuildinfo
+
+# Logs and temp files
+*.log
+.DS_Store
+Thumbs.db

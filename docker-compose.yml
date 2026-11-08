@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sqlloom-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: appdb
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  sqlloom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sqlloom-proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["-listen", ":5432", "-upstream", "postgres:5432", "-dashboard", ":8080", "-cache-mem-mb", "32"]
+    ports:
+      - "5432:5432" # Application connects here as standard Postgres
+      - "8080:8080" # Query Cockpit UI and Prometheus metrics
+    restart: unless-stopped
+
+volumes:
+  pgdata:
