@@ -20,7 +20,20 @@ import (
 	"github.com/alexandrmotologa/sqlloom/internal/wire"
 )
 
+const Version = "1.0.0"
+
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "version" || arg == "--version" || arg == "-v" || arg == "-V" {
+			fmt.Printf("sqlloom v%s\n", Version)
+			return
+		}
+		if arg == "help" || arg == "--help" || arg == "-h" {
+			printUsage()
+			return
+		}
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "explain" {
 		query := ""
 		if len(os.Args) > 2 {
@@ -135,4 +148,27 @@ func printBanner(cfg *config.Config) {
 	fmt.Printf("Listen: %s | Upstream: %s | Dashboard: %s\n", cfg.ListenAddr, cfg.UpstreamAddr, cfg.DashboardAddr)
 	fmt.Printf("Memory Limit: %d MB | Max Entries: %d | Default TTL: %ds | Grace Mode: %v\n", cfg.CacheMaxMemoryMB, cfg.CacheMaxEntries, cfg.DefaultTTLSec, cfg.GraceMode)
 	fmt.Println("-------------------------------------------------------------------------")
+}
+
+func printUsage() {
+	fmt.Printf(`sqlloom v%s - Transparent PostgreSQL Wire-Protocol Query Cache & Read Acceleration Proxy
+
+Usage:
+  sqlloom [command] [flags]
+
+Commands:
+  (default)  Start the PostgreSQL wire proxy daemon and web dashboard
+  explain    Diagnose and fingerprint a SQL statement without connecting to a database
+  version    Display version information
+  help       Show this help message
+
+Environment Variables:
+  SQLLOOM_LISTEN_ADDR       Proxy listen address (default: 127.0.0.1:5433)
+  SQLLOOM_UPSTREAM_ADDR     Upstream PostgreSQL address (default: 127.0.0.1:5432)
+  SQLLOOM_DASHBOARD_ADDR    Telemetry dashboard address (default: :9191)
+  SQLLOOM_CACHE_MAX_MEMORY  Max memory cache in MB (default: 128)
+  SQLLOOM_CACHE_MAX_ENTRIES Max cache entries (default: 50000)
+  SQLLOOM_DEFAULT_TTL_SEC   Default TTL in seconds (default: 60)
+  SQLLOOM_GRACE_MODE        Serve stale on upstream failure (default: true)
+`, Version)
 }

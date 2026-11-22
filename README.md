@@ -5,6 +5,8 @@
 <h1 align="center">sqlloom</h1>
 
 <p align="center">
+  <a href="https://github.com/alexandrmotologa/sqlloom/actions/workflows/ci.yml"><img src="https://github.com/alexandrmotologa/sqlloom/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/alexandrmotologa/sqlloom/releases"><img src="https://img.shields.io/badge/version-v1.0.0-6366f1.svg?style=flat" alt="Version" /></a>
   <img src="https://img.shields.io/badge/Go-1.23-00ADD8?style=flat&logo=go" alt="Go 1.23" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/Wire_Protocol-PostgreSQL_3.0-336791?style=flat&logo=postgresql" alt="PostgreSQL 3.0 Wire Protocol" />
